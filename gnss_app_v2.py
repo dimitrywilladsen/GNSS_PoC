@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from streamlit_autorefresh import st_autorefresh
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Palantir PoC: EW Threat Tracker", layout="wide")
+st.set_page_config(page_title="GNSS Interference PoC", layout="wide")
 st.title("Aviation Domain: GNSS Integrity & EW Tracking")
 
 # Auto-refresh the dashboard every 60 seconds
