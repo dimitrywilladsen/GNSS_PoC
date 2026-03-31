@@ -136,42 +136,126 @@ with tab_map:
             latest_target = recent_threats.iloc[-1]
             st.warning(f"🎯 **Last Target Impacted:** {latest_target['callsign']} at {latest_target['latitude']:.4f}, {latest_target['longitude']:.4f}")
 
+    st.markdown("""
+        <style>
+        /* Pin the popover to the bottom-left of the map column */
+        div[data-testid="column"]:nth-of-type(1) .stPopover {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+        /* Make the popover content expand to the right so it doesn't get cut off */
+        div[data-testid="stPopoverContent"] {
+            width: 350px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
     # MAP UI CONTROLS
-    col_m1, col_m2 = st.columns([3, 1])
+    col_m1, col_m2 = st.columns([4, 1])
     
+    st.markdown("""
+        <style>
+        /* Remove the padding at the top of the column to align with map */
+        [data-testid="column"]:nth-of-type(2) [data-testid="stVerticalBlock"] > div:first-child {
+            margin-top: -35px;
+        }
+        /* Reduce the gap between individual metrics */
+        [data-testid="stMetric"] {
+            margin-bottom: -15px;
+        }
+        /* Tighten the space around the horizontal divider */
+        hr {
+            margin-top: 10px !important;
+            margin-bottom: 10px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
     with col_m2:
-        st.markdown("### 🛠️ Map Controls")
+        # --- 1. ENLARGED CONTROLS ---
+        st.markdown("####  Display Settings")
+        map_mode = st.radio(
+            "Intelligence Layer:", 
+            ["Density (Raw Volume)", "Trend (7-Day Delta)"],
+            label_visibility="collapsed" # Hides redundant label, keeps header big
+        )
         
-        # Toggle for Map Mode
-        map_mode = st.radio("Intelligence Layer:", ["Density (Raw Volume)", "Trend (7-Day Delta)"])
+        lookback = st.select_slider(
+            "Time Window:", 
+            options=["1h", "6h", "24h", "48h", "7d", "30d"], 
+            value="24h",
+            help="Filters the raw volume of anomalous pings shown in 'Density' mode and defines the evaluation period used to calculate performance surges or drops in 'Trend' mode.",
+            # label_visibility="collapsed"
+        )
         
-        lookback = st.select_slider("Time Window:", options=["1h", "6h", "24h", "48h", "7d", "30d"], value="24h")
-        
-        # Filter telemetry by time window
+        # --- CALCULATION LOGIC (Untouched) ---
         time_map = {"1h": 1, "6h": 6, "24h": 24, "48h": 48, "7d": 168, "30d": 720}
         cutoff_time = datetime.now() - timedelta(hours=time_map[lookback])
+
+        # --- 2. MARKDOWN DIVIDER BETWEEN SLIDER AND ANOMALIES ---
+        st.markdown("---")
+
+        # --- ANALYTICAL ENGINE: ISOLATION LOGIC (Untouched) ---
+        if not ew_history_df.empty:
+            # 1. Broad Collection (The "Wide Net")
+            filtered_df = ew_history_df[ew_history_df['timestamp'] >= cutoff_time]
+            total_anomalies = len(filtered_df)
+
+            # 2. Mathematical Isolation (The "Verified Impact" Logic)
+            interference_df = filtered_df[
+                (filtered_df['nic'] < 7) & 
+                (filtered_df['sil'] >= 3)
+            ]
+            
+            # 3. Final Analytical Metrics
+            isolated_pings = len(interference_df)
+            unique_impacted = interference_df['callsign'].nunique() if not interference_df.empty else 0
+        else:
+            filtered_df = pd.DataFrame()
+            total_anomalies = 0
+            isolated_pings = 0
+            unique_impacted = 0
+
+        # --- 3. METRICS WITH FULL DEFINITIONS ---
         
-        filtered_df = ew_history_df[ew_history_df['timestamp'] >= cutoff_time] if not ew_history_df.empty else pd.DataFrame()
+        st.markdown("#### Live Data")
 
-        # --- METRIC CALCULATIONS ---
-        total_anomalies = len(filtered_df)
-        affected_aircraft = filtered_df['callsign'].nunique() if not filtered_df.empty and 'callsign' in filtered_df.columns else 0
+        st.metric(
+            label="Total Anomalous Pings", 
+            value=f"{total_anomalies:,}", 
+            help="The raw count of all suspicious telemetry points captured. This baseline includes hardware glitches and environmental signal degradation."
+        )
 
-        # Display the metrics
-        st.metric("Total Anomalous Pings", f"{total_anomalies:,}")
-        st.metric("Unique Aircraft Affected", f"{affected_aircraft:,}")
-        st.metric("Active Regional NOTAMs", len(notam_df))
+        st.metric(
+            label="Isolated Interference Pings", 
+            value=f"{isolated_pings:,}", 
+            help="The subset of pings where high-integrity hardware (SIL >= 3) reported a degraded signal (NIC < 7)."
+        )
+
+        st.metric(
+            label="Unique Aircraft Impacted", 
+            value=f"{unique_impacted:,}", 
+            help="Unique high-integrity aircraft platforms assessed to be experiencing active signal denial within the AOR."
+        )
         
         st.markdown("---")
-        st.markdown("### 🗺️ Map Legend")
-        if map_mode == "Density (Raw Volume)":
-            st.markdown("🛑 **Warm Colors:** High density of interference events.")
-        else:
-            st.markdown("🔴 **Red Pillars:** Surge in interference vs 7-day average.")
-            st.markdown("🟢 **Green Pillars:** Drop in interference vs 7-day average.")
-            st.markdown("⚪ **Gray Pillars:** Stable / No significant change.")
-        
-        st.markdown("🔵 **Points:** Origin facility of FAA/ICAO NOTAMs.")
+
+        # --- 4. DYNAMIC MAP LEGEND POPOVER ---
+        with st.popover("🗺️ Map Legend", use_container_width=True):
+            st.markdown("### Signal Intelligence Reference")
+            
+            if map_mode == "Density (Raw Volume)":
+                st.markdown("🛑 **Warm Colors:** High density of interference events.")
+            else:
+                st.markdown("🔴 **Red Pillars:** Surge in interference vs 7-day average.")
+                st.markdown("🟢 **Green Pillars:** Drop in interference vs 7-day average.")
+                st.markdown("⚪ **Gray Pillars:** Stable / No significant change.")
+            
+            st.markdown("---")
+            st.markdown("🔵 **Points:** Origin facility of FAA/ICAO NOTAMs.")
+            st.info("Note: NIC/SIL math is applied to all layers to isolate external interference.")
 
     with col_m1:
         # Base Layer: AOR Bounding Box
@@ -260,14 +344,21 @@ with tab_map:
                 )
             )
 
-        # Render Map
+# Render Map
         deck = pdk.Deck(
             layers=map_layers, 
-            initial_view_state=pdk.ViewState(latitude=33.0, longitude=35.0, zoom=4.5, pitch=45), 
+            initial_view_state=pdk.ViewState(
+                latitude=25.0,
+                longitude=45.0,
+                zoom=3.5, 
+                pitch=45,
+                bearing=0
+            ),
             map_style="dark", 
             tooltip={"html": "<b>Location:</b> {grid_lat}, {grid_lon} <br/> <b>Change vs Baseline:</b> {delta}"} 
         )
-        st.pydeck_chart(deck)
+        
+        st.pydeck_chart(deck, use_container_width=True, height=575)
 
 # --- TAB 2: OSINT NEWS FEED ---
 with tab_osint:
