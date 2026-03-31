@@ -1,0 +1,4 @@
+stomp.py
+pandas
+requests
+python-dotenv

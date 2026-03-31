@@ -1,0 +1,24 @@
+# Security
+.env
+
+# Project Folders
+archive/
+temp/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# Data files (Optional: keep these local if they get huge)
+notam_reports_v2.csv
+*.db
+*.log
+
+# Editor settings
+.vscode/
+.idea/
