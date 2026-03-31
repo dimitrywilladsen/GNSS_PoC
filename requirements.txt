@@ -1,4 +1,9 @@
+streamlit
+streamlit-autorefresh
 stomp.py
 pandas
 requests
 python-dotenv
+folium
+streamlit-folium
+plotly
